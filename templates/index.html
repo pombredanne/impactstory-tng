@@ -8,7 +8,7 @@
 
    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" rel="stylesheet" >
    <link href="//maxcdn.bootstrapcdn.com/font-awesome/4.6.0/css/font-awesome.min.css" rel="stylesheet">
-   <link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/angular_material/1.0.0/angular-material.min.css">
+   <link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/angular_material/1.1.0-rc4/angular-material.min.css">
    <link href="/static/dist/main.css" rel="stylesheet">
    <link rel="icon" type="image/ico" href="/static/img/favicon.ico" />
 
@@ -94,31 +94,32 @@
             </div>
 
             <div class="content">
-                <div class="title">
-                    <a href="u/{{person.orcid_id}}/p/{{ product.id }}">{{ product.title }}</a>
+                <div class="title-row row">
+                    <div class="title col-md-10">
+                        <a href="u/{{person.orcid_id}}/p/{{ product.id }}">{{ product.title }}</a>
+                    </div>
+                    <div class="fulltext col-md-2">
+                        <a class="val"
+                           target="_blank"
+                           href="{{ product.fulltext_url }}"
+                           ng-show="product.fulltext_url">
+                            [full text]
+                        </a>
+                    </div>
+
                 </div>
                 <div class="under">
                     <span class="year date">{{ product.year }}</span>
                     <span class="attr">
                         {{ product.journal }}
-                        <span class="oa-icon oa-journal" ng-show="product.is_oa_journal">
-                            <md-tooltip>
-                                This is an Open Access journal
-                            </md-tooltip>
-                            <i class="fa fa-unlock-alt"></i>
-                        </span>
-                        <span class="oa-icon oa-journal" ng-show="product.is_oa_repository && !product.is_oa_journal">
-                            <md-tooltip>
-                                This is an open-access repository
-                            </md-tooltip>
-                            <i class="fa fa-unlock-alt"></i>
-                        </span>
-                        <span class="missing-doi" ng-show="!product.doi">
+                        <a class="missing-doi"
+                           href="u/{{ person.orcid_id }}/p/{{ product.id }}"
+                           ng-show="!product.doi">
                             <md-tooltip>
                                 We may be missing data for this publication
                             </md-tooltip>
                             <i class="fa fa-adjust"></i>
-                        </span>
+                        </a>
                     </span>
                 </div>
                 <div class="source-icons" ng-show="product.num_mentions">
@@ -147,7 +148,8 @@
 
    <!-- BADGE ITEM -->
    <script type="text/ng-template" id="badge-item.tpl.html">
-        <div class="achievement group-{{ badge.group }} badge-{{ badge.name }} view-item" ng-controller="badgeItemCtrl">
+        <div class="achievement group-{{ badge.group }} badge-{{ badge.name }} view-item"
+             ng-controller="badgeItemCtrl">
 
             <div class="icon group-{{ badge.group }}">
                 <img ng-src="static/img/badges/{{ badge.name }}.png" alt="">
@@ -162,6 +164,14 @@
                         </md-tooltip>
                         {{ numFormat.decimalToPerc(badge.percentile) }}
                     </span>
+                    <a class="share"
+                       target="_blank"
+                       ng-show="ownsThisProfile"
+                       ng-click="shareBadge(badge.name)"
+                       href="https://twitter.com/intent/tweet?url=https://impactstory.org/u/{{ person.orcid_id }}/a/{{ badge.display_name.toLowerCase().replace(' ', '-') }}&text=I unlocked the '{{ badge.display_name }}' achievement on @Impactstory:">
+                        <i class="fa fa-twitter"></i>
+                        <span class="text">share link</span>
+                    </a>
                 </div>
                 <div class="under">
                     <div class="descr">
@@ -404,7 +414,7 @@
    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular-messages.min.js"></script>
    <script src="https://cdnjs.cloudflare.com/ajax/libs/angular.js/1.5.0-rc.0/angular-resource.min.js"></script>
    <script src="https://cdnjs.cloudflare.com/ajax/libs/angular.js/1.5.0-rc.0/angular-sanitize.min.js"></script>
-   <script src="https://ajax.googleapis.com/ajax/libs/angular_material/1.0.0/angular-material.min.js"></script>
+   <script src="https://ajax.googleapis.com/ajax/libs/angular_material/1.1.0-rc4/angular-material.min.js"></script>
 
    <!-- externally hosted libs outside the Angular ecosystem -->
    <script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.2/underscore-min.js"></script>

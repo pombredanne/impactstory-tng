@@ -395,7 +395,6 @@ class reading_level(BadgeAssigner):
     context = u"That's great &mdash; it helps lay people and practitioners use your research.  " \
               u"It also puts you in the top {percentile}% in readability."
     pad_percentiles_with_zeros = False
-    show_in_ui = True
 
     def decide_if_assigned_threshold(self, person, threshold):
         reading_levels = {}
@@ -422,8 +421,9 @@ class reading_level(BadgeAssigner):
 
         if reading_levels.values():
             average_reading_level = sum(reading_levels.values()) / float(len(reading_levels))
-            self.candidate_badge.value = average_reading_level
-            self.assigned = True
+            if average_reading_level <= 14:
+                self.candidate_badge.value = average_reading_level
+                self.assigned = True
 
 
 
@@ -483,7 +483,6 @@ class big_hit(BadgeAssigner):
         BadgeLevel(1, threshold=0),
     ]
     context = u"Only {in_the_top_percentile}% of researchers get this much attention on a publication."
-    show_in_ui = True
 
     def decide_if_assigned_threshold(self, person, threshold):
         self.candidate_badge.value = 0
@@ -585,7 +584,6 @@ class global_reach(BadgeAssigner):
     ]
     support_finale = " countries."
     context = u"That's high: only {in_the_top_percentile}% of researchers get that much international attention."
-    show_in_ui = True
 
     def decide_if_assigned_threshold(self, person, threshold):
         if len(person.countries_using_mendeley) > threshold:
@@ -701,7 +699,6 @@ class clean_sweep(BadgeAssigner):
         BadgeLevel(1, threshold=0),
     ]
     context = u"Fewer than a quarter of researchers show this kind of consistency."
-    show_in_ui = True
 
     def decide_if_assigned_threshold(self, person, threshold):
         num_with_metrics = 0
@@ -729,7 +726,6 @@ class global_south(BadgeAssigner):
         BadgeLevel(1, threshold=.001),
     ]
     context = u"That's a high proportion: only {in_the_top_percentile}% of researchers publish work that inspires this level of engagement from the developing world."
-    show_in_ui = True
 
 
     def decide_if_assigned_threshold(self, person, threshold):
@@ -783,7 +779,7 @@ class open_science_triathlete(BadgeAssigner):
     importance = .5
 
     def decide_if_assigned(self, person):
-        has_oa_paper = [p.doi for p in person.products_with_dois if p.is_oa_journal]
+        has_oa_paper = [p.doi for p in person.products if p.has_fulltext_url and p.guess_genre() == "article"]
         has_data = [p.id for p in person.all_products if p.guess_genre()=="dataset"]
         has_software = person.depsy_percentile > 0
 
@@ -792,55 +788,36 @@ class open_science_triathlete(BadgeAssigner):
             self.candidate_badge.value = 1
 
 # OLD
-class oa_advocate(BadgeAssigner):
-    display_name = "Open Sesame"
-    is_for_products = True
-    group = "openness"
-    description = u"You've published {value}% of your research in gold open access venues."
-    context = u"This level of openness is matched by only {in_the_top_percentile}% of researchers."
-    importance = .5
-
-    def decide_if_assigned(self, person):
-        if person.openness_proportion:  # the openness_proportion takes into account having enough papers
-            if person.openness_proportion >= 0.25:
-                self.candidate_badge.value = person.openness_proportion * 100
-                self.assigned = True
-
-# NEW
-# class open_sesame_new_oa(BadgeAssigner):
+# class oa_advocate(BadgeAssigner):
 #     display_name = "Open Sesame"
+#     is_for_products = True
 #     group = "openness"
-#     description = u"You've published {value}% of your research in open access venues."
+#     description = u"You've published {value}% of your research in gold open access venues."
 #     context = u"This level of openness is matched by only {in_the_top_percentile}% of researchers."
-#     importance = .9
+#     importance = .5
 #     show_in_ui = False
 #
 #     def decide_if_assigned(self, person):
-#         if person.openness_proportion_all_products:  # the openness_proportion takes into account having enough papers
-#             if person.openness_proportion >= 0.1:
+#         if person.openness_proportion:  # the openness_proportion takes into account having enough papers
+#             if person.openness_proportion >= 0.25:
 #                 self.candidate_badge.value = person.openness_proportion * 100
 #                 self.assigned = True
 
 
+class percent_fulltext(BadgeAssigner):
+    display_name = "Open Access"
+    group = "openness"
+    description = u"{value}% of your research is free to read online."
+    context = u"This level of availability puts you in the top {in_the_top_percentile}% of researchers."
+    importance = .9
 
-# class oa_early_adopter(BadgeAssigner):
-#     display_name = "OA Early Adopter"
-#     is_for_products = True
-#     group = "openness"
-#     description = u"You published {value} papers in a gold open access journal back in the day, back before it was cool."
-#     importance = .8
-#     context = u"Only {in_the_top_percentile}% of researchers published {value} gold OA papers before 2009 &mdash; the year PLOS ONE got its Impact Factor."
-#     show_in_ui = False
-#
-#     def decide_if_assigned(self, person):
-#         self.candidate_badge.value = 0
-#         for my_product in person.products_with_dois:
-#             if my_product.year_int > 0 and my_product.year_int < 2009 and my_product.is_oa_journal:
-#                 self.assigned = True
-#                 self.candidate_badge.value += 1
-#                 self.candidate_badge.add_product(my_product)
-#         # if self.assigned:
-#         #     self.candidate_badge.support_items = [p["title"] for p in self.candidate_badge.products]
+    def decide_if_assigned(self, person):
+        openness = person.openness_proportion
+        if openness:  # the openness_proportion takes into account having enough papers
+            if openness >= 0.5:
+                self.candidate_badge.value = openness * 100
+                self.assigned = True
+
 
 
 #############
@@ -914,7 +891,6 @@ class big_in_japan(BadgeAssigner):
     credit = 'Alphaville - "Big In Japan"'
     importance = 0.3
     context = u"Only half of researchers <a href='https://www.youtube.com/watch?v=tl6u2NASUzU'>can claim this honor.</a>"
-    show_in_ui = True
 
     def decide_if_assigned(self, person):
         for my_product in person.all_products:
@@ -924,41 +900,41 @@ class big_in_japan(BadgeAssigner):
                 self.candidate_badge.value = 1
 
 
-class librarian(BadgeAssigner):
-    display_name = "Librarian Love"
-    is_for_products = False
-    group = "engagement"
-    description = u"Librarians love you: {value}% of your bookmarks come from librarians."
-    importance = 0.3
-    context = u"Only {in_the_top_percentile}% of other researchers get this much librarian attention."
-    show_in_ui = False
+# class librarian(BadgeAssigner):
+#     display_name = "Librarian Love"
+#     is_for_products = False
+#     group = "engagement"
+#     description = u"Librarians love you: {value}% of your bookmarks come from librarians."
+#     importance = 0.3
+#     context = u"Only {in_the_top_percentile}% of other researchers get this much librarian attention."
+#     show_in_ui = False
+#
+#     def decide_if_assigned(self, person):
+#         try:
+#             librarian_percent = as_proportion(person.mendeley_job_titles)["Librarian"]
+#             if librarian_percent >= 0.15:
+#                 self.assigned = True
+#                 self.candidate_badge.value = librarian_percent * 100
+#         except KeyError:
+#             pass
 
-    def decide_if_assigned(self, person):
-        try:
-            librarian_percent = as_proportion(person.mendeley_job_titles)["Librarian"]
-            if librarian_percent >= 0.15:
-                self.assigned = True
-                self.candidate_badge.value = librarian_percent * 100
-        except KeyError:
-            pass
-
-class faculty(BadgeAssigner):
-    display_name = "Faculty Fav"
-    is_for_products = False
-    group = "engagement"
-    description = u"You are a faculty favorite: {value}% of your bookmarks come from faculty."
-    importance = 0.3
-    context = u"Only {in_the_top_percentile}% of other researchers get this much faculty attention."
-    show_in_ui = False
-
-    def decide_if_assigned(self, person):
-        try:
-            faculty_percent = as_proportion(person.mendeley_job_titles)["Faculty"]
-            if faculty_percent >= 0.15:
-                self.assigned = True
-                self.candidate_badge.value = faculty_percent * 100
-        except KeyError:
-            pass
+# class faculty(BadgeAssigner):
+#     display_name = "Faculty Fav"
+#     is_for_products = False
+#     group = "engagement"
+#     description = u"You are a faculty favorite: {value}% of your bookmarks come from faculty."
+#     importance = 0.3
+#     context = u"Only {in_the_top_percentile}% of other researchers get this much faculty attention."
+#     show_in_ui = False
+#
+#     def decide_if_assigned(self, person):
+#         try:
+#             faculty_percent = as_proportion(person.mendeley_job_titles)["Faculty"]
+#             if faculty_percent >= 0.15:
+#                 self.assigned = True
+#                 self.candidate_badge.value = faculty_percent * 100
+#         except KeyError:
+#             pass
 
 # class teaching(BadgeAssigner):
 #     display_name = "Teaching Goodness"
@@ -967,7 +943,7 @@ class faculty(BadgeAssigner):
 #     description = u"Your research helps newbies get started: {value}% of your bookmarks come from undergrad and Master's students."
 #     importance = 0.4
 #     context = u"This level of student interest puts you in the top {in_the_top_percentile}% of researchers."
-#     show_in_ui = True
+#     show_in_ui = False
 #
 #     def decide_if_assigned(self, person):
 #         student_percent = 0
@@ -980,53 +956,53 @@ class faculty(BadgeAssigner):
 #             self.assigned = True
 #             self.candidate_badge.value = student_percent * 100
 
-class teaching_phd(BadgeAssigner):
-    display_name = "Teaching Goodness"
-    is_for_products = False
-    group = "engagement"
-    description = u"Your research helps newbies get started: {value}% of your bookmarks come from undergrad and graduate students."
-    importance = 0.4
-    context = u"This level of student interest puts you in the top {in_the_top_percentile}% of researchers."
-    show_in_ui = False
+# class teaching_phd(BadgeAssigner):
+#     display_name = "Teaching Goodness"
+#     is_for_products = False
+#     group = "engagement"
+#     description = u"Your research helps newbies get started: {value}% of your bookmarks come from undergrad and graduate students."
+#     importance = 0.4
+#     context = u"This level of student interest puts you in the top {in_the_top_percentile}% of researchers."
+#     show_in_ui = False
+#
+#     def decide_if_assigned(self, person):
+#         student_percent = 0
+#         if person.mendeley_job_titles and "Undergrad Student" in person.mendeley_job_titles:
+#             student_percent += as_proportion(person.mendeley_job_titles)["Undergrad Student"]
+#         if person.mendeley_job_titles and "Masters Student" in person.mendeley_job_titles:
+#             student_percent += as_proportion(person.mendeley_job_titles)["Masters Student"]
+#         if person.mendeley_job_titles and "PhD Student" in person.mendeley_job_titles:
+#             student_percent += as_proportion(person.mendeley_job_titles)["PhD Student"]
+#
+#         if student_percent >= 0.33 and person.mendeley_readers >= 3:
+#             self.assigned = True
+#             self.candidate_badge.value = student_percent * 100
 
-    def decide_if_assigned(self, person):
-        student_percent = 0
-        if person.mendeley_job_titles and "Undergrad Student" in person.mendeley_job_titles:
-            student_percent += as_proportion(person.mendeley_job_titles)["Undergrad Student"]
-        if person.mendeley_job_titles and "Masters Student" in person.mendeley_job_titles:
-            student_percent += as_proportion(person.mendeley_job_titles)["Masters Student"]
-        if person.mendeley_job_titles and "PhD Student" in person.mendeley_job_titles:
-            student_percent += as_proportion(person.mendeley_job_titles)["PhD Student"]
 
-        if student_percent >= 0.33 and person.mendeley_readers >= 3:
-            self.assigned = True
-            self.candidate_badge.value = student_percent * 100
-
-
-class interdisciplinarity(BadgeAssigner):
-    display_name = "Interdisciplinary Delight"
-    is_for_products = False
-    group = "engagement"
-    description = u"Your research is cross-over hit: people in {value} different fields have heavily bookmarked your papers."
-    importance = 0.8
-    context = u"Only {in_the_top_percentile}% of researchers receive as much attention in as many disciplines."
-    show_in_ui = False
-
-    def decide_if_assigned(self, person):
-        if not person.mendeley_disciplines:
-            return
-
-        discipline_proportions = as_proportion(person.mendeley_disciplines)
-        disciplines_above_threshold = []
-        for name, proportion in discipline_proportions.iteritems():
-            if proportion >= 0.1 and person.mendeley_disciplines[name] >= 5:
-                disciplines_above_threshold.append(name)
-
-        if len(disciplines_above_threshold) > 3:
-            self.assigned = True
-            self.candidate_badge.value = len(disciplines_above_threshold)
-            self.candidate_badge.support = u"The fields include: {}".format(
-                ", ".join(sorted(disciplines_above_threshold)))
+# class interdisciplinarity(BadgeAssigner):
+#     display_name = "Interdisciplinary Delight"
+#     is_for_products = False
+#     group = "engagement"
+#     description = u"Your research is cross-over hit: people in {value} different fields have heavily bookmarked your papers."
+#     importance = 0.8
+#     context = u"Only {in_the_top_percentile}% of researchers receive as much attention in as many disciplines."
+#     show_in_ui = False
+#
+#     def decide_if_assigned(self, person):
+#         if not person.mendeley_disciplines:
+#             return
+#
+#         discipline_proportions = as_proportion(person.mendeley_disciplines)
+#         disciplines_above_threshold = []
+#         for name, proportion in discipline_proportions.iteritems():
+#             if proportion >= 0.1 and person.mendeley_disciplines[name] >= 5:
+#                 disciplines_above_threshold.append(name)
+#
+#         if len(disciplines_above_threshold) >= 3:
+#             self.assigned = True
+#             self.candidate_badge.value = len(disciplines_above_threshold)
+#             self.candidate_badge.support = u"The fields include: {}".format(
+#                 ", ".join(sorted(disciplines_above_threshold)))
 
 
 # class controversial(BadgeAssigner):

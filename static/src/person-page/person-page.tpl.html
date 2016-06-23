@@ -161,6 +161,7 @@
                             <span class="subscore {{ subscore.name }}"
                                   ng-class="{ unselected: selectedSubscore && selectedSubscore.name != subscore.name}"
                                   ng-click="toggleSeletedSubscore(subscore)"
+                                  ng-show="subscore.badgesCount"
                                   ng-repeat="subscore in subscores | orderBy: 'sortOrder' | filter: { name: '!fun' }">
                                 <i class="fa fa-{{ getBadgeIcon(subscore.name) }}"></i>
                                 <span class="number">{{ subscore.badgesCount }}</span>
@@ -378,10 +379,8 @@
 
 
                         <span class="def openness" ng-show="selectedSubscore.name=='openness'">
-                            <strong>Openness</strong> looks at how easy it is for people to actually read and use
-                            your research; publishing in <a href="https://en.wikipedia.org/wiki/Open_access">Open Access</a>
-                            venues is a big part of this, but so is publishing open data and code, and publishing in ways that build lay and practitioner
-                            audiences.
+                            <strong>Openness</strong> makes it easy for people to read and use
+                            your research.
                         </span>
 
                         <span class="def fun" ng-show="selectedSubscore.name=='fun'">
@@ -450,10 +449,7 @@
                         </span>
                         <span class="val" ng-show="subscore.badgesCount">({{ subscore.badgesCount }})</span>
                     </span>
-
                 </div>
-
-
             </div>
         </div>
 
@@ -637,7 +633,17 @@
 
         </div>
     </div>
-
-
 </div>
+
+<script type="text/ng-template" id="badgeDialog.tpl.html">
+    <md-dialog id="badgeDialog">
+        <md-dialog-content>
+            <h2>Check it out! {{ firstName }} unlocked this nifty achievement:</h2>
+            <div class="badge-container" ng-include="'badge-item.tpl.html'"></div>
+        </md-dialog-content>
+        <md-dialog-actions>
+            <md-button ng-click="cancel()">Dismiss</md-button>
+        </md-dialog-actions>
+    </md-dialog>
+</script>
 

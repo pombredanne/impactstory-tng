@@ -46,10 +46,17 @@
 
 
 
+.fulltext, .no-fulltext {
+  //display: none;
+}
+
 html {
+  //height: auto;
+  //background: #fff;
   body {
     font-size: 16px;
     font-family: "Lato", sans-serif;
+    height: auto;
     //@media @mobile {
     //  font-size: 12px;
     //}
@@ -73,8 +80,8 @@ html {
       border: 0;
     }
     div:focus {
-      outline: none;
-      border: 0;
+      outline: none !important;
+      //border: none !important;
     }
     td:focus {
       outline: none;
@@ -642,6 +649,10 @@ div.page.person, div.page.product-page {
     }
 
     a {
+      @media @mobile {
+        font-weight: bold;
+        padding: 7px;
+      }
       font-size: 14px;
       padding: 7px 15px;
       text-transform: uppercase;
@@ -654,6 +665,9 @@ div.page.person, div.page.product-page {
       &.selected-true {
         color: @primaryColor;
         border-bottom: 3px solid @primaryColor;
+        @media @mobile {
+          border: none;
+        }
       }
     }
   }
@@ -845,6 +859,26 @@ div.page.person, div.page.product-page {
         &.publications {
           .title {
             font-size: 16px;
+          }
+          .fulltext {
+            .val {
+              // don't show
+              display: none;
+            }
+          }
+        }
+
+        // override generic .achievement styles so
+        // they will fit better on the overview tab.
+        &.badges {
+          .achievement {
+            padding: 10px;
+            .under {
+              font-size: 14px;
+            }
+            .share {
+              display: none;
+            }
           }
         }
 
@@ -1187,6 +1221,13 @@ div.page.person, div.page.product-page {
           display: none;
         }
       }
+      .fulltext {
+        a {
+          font-size: 12px;
+          margin-top: 5px;
+          //color: #999;
+        }
+      }
       .source-icons {
         a.sort-score {
           margin-right: 5px;
@@ -1222,6 +1263,27 @@ div.page.person, div.page.product-page {
 
   // achievement list item
   &.achievement {
+    padding: 20px;
+    //&:hover {
+    //  background: #eee;
+    //}
+    @media @mobile {
+      display: block;
+      .icon {
+        float: left;
+      }
+      .content {
+        .title {
+          min-height: 64px;
+          margin-top: 15px;
+          margin-left: 65px;
+          .share {
+            display: block;
+            padding-top: 5px !important;
+          }
+        }
+      }
+    }
 
     .group-engagement {color: @engagement;}
     .group-openness {color: @openness;}
@@ -1243,7 +1305,7 @@ div.page.person, div.page.product-page {
 
     .icon {
       line-height: 1;
-      //margin-right: 15px;
+      margin-top: 5px;
       min-width: 70px;
       img {
         height: 64px;
@@ -1255,18 +1317,31 @@ div.page.person, div.page.product-page {
     .content{
       .title{
         font-size: 20px;
+        .share {
+          margin-right: 10%;
+          font-size: 12px;
+          color: #777;
+          padding: 10px;
+          &:hover {
+            text-decoration: underline;
+          }
+          i {
+            opacity: .5;
+          }
+        }
       }
       .under {
+        font-size: 15px;
         .descr{
           em.n {
             font-size: 120%;
           }
         }
         .support{
+          font-size: 90%;
           .intro{}
           .items{
             .support-item{
-
             }
           }
           .more{
@@ -1444,8 +1519,19 @@ div.page.settings-page {
     border-bottom: 1px solid #eee;
     .biblio-col {
       margin-bottom: 10px;
+      a.back-to-profile {
+        margin-bottom: 10px;
+        margin-left: -5px;
+        display: inline-block;
+      }
+      .genre {
+        font-size: 14px;
+        i {
+          opacity: .8;
+        }
+      }
       h2 {
-        margin-top: 10px;
+        margin-top: 0;
       }
       .journal {
         color: #333;
@@ -1455,29 +1541,16 @@ div.page.settings-page {
           }
         }
       }
-      .type {
-        font-size: 14px;
-        .oa {
-          color: @openness;
-          margin-right: 20px;
-
-        }
-        .genre {
-          display: block;
-        }
+      .no-fulltext {
+        margin: 15px 0 10px;
       }
-      .score {
-        margin-top: 10px;
-        img {
-          margin-top: -5px;
-        }
-        .val {
-          font-size: 16px;
-          font-weight: bold;
-        }
-        a.ti-label {
-          font-size: 12px;
-          color: #333;
+      .fulltext {
+        margin: 10px 0 5px;
+        a {
+          color: @openness;
+          i.fa-external-link {
+            font-size: 10px;
+          }
         }
       }
     }
@@ -1516,6 +1589,8 @@ div.page.settings-page {
 .page.about-page {
   max-width: 600px;
   margin: 100px auto;
+  font-size: 18px;
+  line-height: 1.6;
   h3 {
     text-transform: capitalize;
     margin-top: 70px;
@@ -1530,6 +1605,8 @@ div.page.settings-page {
   }
 }
 .page.about-data {
+  font-size: 18px;
+  line-height: 1.6;
   max-width: 600px;
   margin: 100px auto;
   h3 {
@@ -1621,10 +1698,10 @@ div.page.settings-page {
       position: fixed;
       top: 50%;
       left: 50%;
-      width: 200px;
-      height: 200px;
-      margin-top: -100px;
-      margin-left: -100px;
+      width: 100px;
+      height: 100px;
+      margin-top: -50px;
+      margin-left: -50px;
 
     }
 }
@@ -1693,6 +1770,42 @@ div.page.settings-page {
 
 }
 
+.page.products-sample {
+  h2 {
+    margin-bottom: 20px;
+  }
+  .product {
+    margin-bottom: 10px;
+    .id {
+      font-size: 14px;
+      color: #999;
+    }
+    a {
+    }
+  }
+}
+
+// angular-material's dialogs
+
+md-dialog {
+  max-width: 500px;
+  &#badgeDialog {
+    padding: 20px 10px 0;
+    h2 {
+      font-size: 17px;
+
+      border-bottom: 1px solid #eee;
+      padding-bottom: 15px;
+      text-align: center;
+    }
+    .title {
+      font-size: 24px;
+    }
+    .under {
+      font-size: 16px;
+    }
+  }
+}
 
 
 

@@ -116,15 +116,24 @@ def get_identifiers_from_biblio_dict(orcid_product_dict):
     if orcid_product_dict.get('work-external-identifiers', []):
         for x in orcid_product_dict.get('work-external-identifiers', []):
             for eid in orcid_product_dict['work-external-identifiers']['work-external-identifier']:
-                ns = eid['work-external-identifier-type']
-                nid = str(eid['work-external-identifier-id']['value'].encode('utf-8')).lower()
-                identifiers.append((ns, nid))
+                try:
+                    ns = eid['work-external-identifier-type']
+                    nid = str(eid['work-external-identifier-id']['value'].encode('utf-8')).lower()
+                    identifiers.append((ns, nid))
+                except TypeError:
+                    pass
     return identifiers
 
 def get_isbn_from_biblio_dict(orcid_product_dict):
     for (ns, nid) in get_identifiers_from_biblio_dict(orcid_product_dict):
         if ns == "ISBN":
             return nid.replace("-", "")
+    return None
+
+def get_arxiv_from_biblio_dict(orcid_product_dict):
+    for (ns, nid) in get_identifiers_from_biblio_dict(orcid_product_dict):
+        if ns == "ARXIV":
+            return nid.lower().replace("arxiv:", "")
     return None
 
 
@@ -226,6 +235,7 @@ def set_biblio_from_biblio_dict(my_product, biblio_dict):
         pass
 
     my_product.doi = get_doi_from_biblio_dict(biblio_dict)
+    my_product.arxiv = get_arxiv_from_biblio_dict(biblio_dict)
     my_product.isbn = get_isbn_from_biblio_dict(biblio_dict)  #not in db. just used in deduping for now.
 
 

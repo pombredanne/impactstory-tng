@@ -5,6 +5,10 @@
                 <i class="fa fa-chevron-left"></i>
                 Back to {{ person.first_name }}'s publications
             </a>
+            <div class="genre" ng-show="product.genre != 'article' && product.genre != 'other'">
+                <i class="fa fa-{{ getGenreIcon(product.genre) }}"></i>
+                {{ product.genre.replace("-", " ") }}
+            </div>
             <h2 class="title">
                 {{ product.title }}
             </h2>
@@ -33,31 +37,18 @@
 
             </div>
 
-            <div class="type">
-                <span class="oa" ng-show="product.is_oa_repository">
+            <div class="fulltext" ng-show="product.fulltext_url">
+                <a href="{{ product.fulltext_url }}">
                     <i class="fa fa-unlock-alt"></i>
-                    Open access
-                </span>
-                <span class="oa" ng-show="product.is_oa_journal">
-                    <i class="fa fa-unlock-alt"></i>
-                    Open Access
-                </span>
-                <span class="genre" ng-show="product.genre != 'article'">
-                    <!--
-                    <i class="fa fa-{{ getGenreIcon(product.genre) }}"></i>
-                    -->
-                    {{ product.genre }}
-                </span>
-
-
-            </div>
-            <div class="score" ng-show="product.altmetric_score">
-                <a href="https://www.altmetric.com/details/{{ product.altmetric_id }}"
-                   class="ti-label">
-                    <img src="static/img/favicons/altmetric.ico" alt="">
-                    <span class="val">{{ numFormat.short(product.altmetric_score) }}</span>
-                    <span class="ti-label">Altmetric.com score</span>
+                    Free fulltext available
+                    <i class="fa fa-external-link"></i>
                 </a>
+            </div>
+            <div class="no-fulltext" ng-show="!product.fulltext_url && ownsThisProfile">
+                <div class="btn btn-default" ng-click="setFulltextUrl($event)">
+                    <i class="fa fa-link"></i>
+                    Add a link to free fulltext
+                </div>
             </div>
         </div>
     </div>
@@ -75,8 +66,7 @@
                     <a href="https://en.wikipedia.org/wiki/Digital_object_identifier">
                         this standard unique identifier,
                     </a>
-                    it's hard to track any conversations about the work online or determine its
-                    open access status.
+                    it's harder to track online conversations about the work.
                 </p>
                 <p>
                     If you've

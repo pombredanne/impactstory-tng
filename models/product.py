@@ -1,6 +1,7 @@
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import deferred
+from sqlalchemy import or_
 from collections import defaultdict
 import langdetect
 import json
@@ -11,7 +12,8 @@ import re
 import logging
 import iso8601
 import pytz
-import time
+from time import sleep
+from time import time
 import datetime
 
 from app import db
@@ -27,7 +29,6 @@ from models.country import country_info
 from models.country import get_name_from_iso
 from models.country import map_mendeley_countries
 from models.language import get_language_from_abbreviation
-from models.oa import get_oa_issns
 from models.orcid import set_biblio_from_biblio_dict
 from models.orcid import get_doi_from_biblio_dict
 from models.orcid import clean_doi
@@ -36,6 +37,7 @@ from models.oa import preprint_doi_fragments
 from models.oa import open_doi_fragments
 from models.oa import dataset_url_fragments
 from models.oa import preprint_url_fragments
+from models import oa
 from models.mendeley import set_mendeley_data
 
 
@@ -50,7 +52,12 @@ def distinct_product_list(new_product, list_so_far):
 
     if not products_with_this_title:
         # print u"add new product {} because new title".format(new_product.normalized_title)
-        return list_so_far + [new_product]
+        if new_product.doi:
+            # don't add if slightly different title if actually has the same doi
+            if not new_product.doi in [p.doi for p in list_so_far if p.doi]:
+                return list_so_far + [new_product]
+        else:
+            return list_so_far + [new_product]
 
     for product_in_list in products_with_this_title:
 
@@ -77,6 +84,21 @@ def distinct_product_list(new_product, list_so_far):
 
     return list_so_far
 
+
+def get_all_products(limit=100):
+    q = db.session.query(Product.title, Product.doi, Product.id)
+    q = q.filter( or_(
+        Product.open_step=="closed",
+        Product.open_step=="sherlock journal"
+        )
+    )
+    q = q.filter(Product.doi != None)
+    q = q.order_by(Product.id)
+    q = q.limit(limit)
+    products = q.all()
+    return products
+
+
 class Product(db.Model):
     id = db.Column(db.Text, primary_key=True)
     doi = db.Column(db.Text)
@@ -91,11 +113,13 @@ class Product(db.Model):
     authors = deferred(db.Column(db.Text))
     authors_short = db.Column(db.Text)
     url = db.Column(db.Text)
+    arxiv = db.Column(db.Text)
     orcid_put_code = db.Column(db.Text)
     orcid_importer = db.Column(db.Text)
 
     orcid_api_raw_json = deferred(db.Column(JSONB))
-    crossref_api_raw = deferred(db.Column(JSONB))
+    # crossref_api_raw = deferred(db.Column(JSONB))
+    crossref_api_raw = db.Column(JSONB)
     altmetric_api_raw = deferred(db.Column(JSONB))
     # mendeley_api_raw = deferred(db.Column(JSONB)) #  @todo go back to this when done exploring
     mendeley_api_raw = db.Column(JSONB)
@@ -107,14 +131,15 @@ class Product(db.Model):
     poster_counts = db.Column(MutableDict.as_mutable(JSONB))
     event_dates = db.Column(MutableDict.as_mutable(JSONB))
 
-    in_doaj = db.Column(db.Boolean)
-    is_open = db.Column(db.Boolean)
-    open_url = db.Column(db.Text)
-    open_urls = db.Column(MutableDict.as_mutable(JSONB))  #change to list when upgrade to sqla 1.1
+    repo_urls = db.Column(MutableDict.as_mutable(JSONB))  #change to list when upgrade to sqla 1.1
     base_dcoa = db.Column(db.Text)
     base_dcprovider = db.Column(db.Text)
+    open_step = db.Column(db.Text)
     license_url = db.Column(db.Text)
-    tdm_response = db.Column(db.Text)
+    sherlock_response = db.Column(db.Text)
+    sherlock_error = db.Column(db.Text)
+    fulltext_url = db.Column(db.Text)
+    user_supplied_fulltext_url = db.Column(db.Text)
 
     error = db.Column(db.Text)
 
@@ -144,15 +169,60 @@ class Product(db.Model):
             db.session.rollback()
 
 
-    def set_data_from_hybrid(self, high_priority=False):
+    def set_oa_from_user_supplied_fulltext_url(self, url):
+        self.user_supplied_fulltext_url = url
+        self.fulltext_url = url
+        self.open_step = "user supplied fulltext url"
+
+
+    def set_oa_from_sherlock(self, high_priority=False):
         try:
-            self.set_hybrid()
+            sherlock_request_list = []
+            host = 0
+            if self.base_dcoa=="2":
+                host = "repo"
+                for repo_url in self.repo_urls["urls"]:
+                    sherlock_request_list.append([repo_url, host])
+            elif self.doi:
+                host = "journal"
+                sherlock_request_list.append([self.url, host])
+            elif self.url:
+                host = "journal"
+                sherlock_request_list.append([self.url, host])
+            else:
+                return  # shouldn't have been called
+
+            self.sherlock_response = u"sherlock error: timeout on {}".format(host)
+
+            url = u"http://sherlockoa.org/articles"
+            # print u"calling sherlock with", sherlock_request_list
+            r = requests.post(url, json=sherlock_request_list)
+            if r and r.status_code==200:
+                results = r.json()["results"]
+                open_responses = [r for r in results if r["is_oa"]]
+                error_responses = [r for r in results if "error" in r]
+                if open_responses:
+                    response = open_responses[0]
+                    print u"sherlock says it is open!", response["url"]
+                    self.fulltext_url = response["url"]
+                    self.open_step = "sherlock {}".format(response["host"])
+                    self.sherlock_response = u"sherlock says: open {}".format(response["host"])
+                elif error_responses:
+                    response = error_responses[0]
+                    print u"sherlock says error: {} {}".format(host, response["error"])
+                    self.fulltext_url = None
+                    self.sherlock_response = u"sherlock error: {} {}".format(host, response["error"])
+                    self.sherlock_error = response["error_message"]
+                else:
+                    # print u"sherlock says it is closed:", sherlock_request_list
+                    self.sherlock_response = u"sherlock says: closed {}".format(host)
+
         except (KeyboardInterrupt, SystemExit):
             # let these ones through, don't save anything to db
             raise
         except Exception:
-            logging.exception("exception in set_data_for_hybrid")
-            print u"in generic exception handler, so rolling back in case it is needed"
+            logging.exception("exception in set_oa_from_sherlock")
+            print u"rolling back in case it is needed"
             db.session.rollback()
 
 
@@ -191,13 +261,17 @@ class Product(db.Model):
         self.set_poster_counts()
         self.set_post_details()
         self.set_event_dates()
-        self.set_in_doaj()
         self.set_license_url()
         self.set_publisher()
 
     @property
     def display_authors(self):
         return self.authors_short
+
+    @property
+    def has_fulltext_url(self):
+        return (self.fulltext_url != None)
+
 
     def set_altmetric_score(self):
         self.altmetric_score = 0
@@ -442,44 +516,6 @@ class Product(db.Model):
             self.event_dates[source].sort(reverse=False)
             # print u"set event_dates for {} {}".format(self.doi, source)
 
-    def set_hybrid(self, high_priority=False):
-        self.tdm_response = None
-
-        if self.is_open or self.base_dcoa=="1":
-            self.tdm_response = "already open"
-        elif not self.crossref_api_raw or "link" not in self.crossref_api_raw:
-            self.tdm_response = "no link"
-        else:
-            try:
-                headers = {"CR-Clickthrough-Client-Token": "dacfdbbb-885aac38-e75b6654-90030f09"}
-                url = self.crossref_api_raw["link"][0]["URL"]
-                # print u"calling {} with headers {}".format(url, headers)
-
-                r = requests.get(url, headers=headers, stream=True, timeout=5)  #timeout in seconds
-
-                if r.status_code == 404: # not found
-                    self.tdm_response = "404"
-                elif r.status_code == 200:
-                    self.tdm_response = u"200: content-type {}".format(r.headers["content-type"])
-                else:
-                    self.tdm_response = str(r.status_code)
-
-                r.close()  #do this because openned it streaming
-
-            except (KeyboardInterrupt, SystemExit):
-                # let these ones through, don't save anything to db
-                raise
-            except requests.Timeout:
-                self.tdm_response = "timeout"
-            except Exception:
-                logging.exception("exception in set_hybrid")
-                self.tdm_response = "exception"
-                print u"in generic exception handler, so rolling back in case it is needed"
-                db.session.rollback()
-            finally:
-                print u"got {} on {} calling {}".format(self.tdm_response, self.doi, url)
-
-
     @property
     def first_author_family_name(self):
         first_author = None
@@ -586,7 +622,7 @@ class Product(db.Model):
             if (hourly_rate_limit_remaining and (hourly_rate_limit_remaining < 500) and not high_priority) or \
                     r.status_code == 420:
                 print u"sleeping for an hour until we have more calls remaining"
-                time.sleep(60*60) # an hour
+                sleep(60*60) # an hour
 
             # Altmetric.com doesn't have this DOI, so the DOI has no metrics.
             if r.status_code == 404:
@@ -607,7 +643,7 @@ class Product(db.Model):
                 self.altmetric_api_raw = r.json()
                 # print u"yay nonzero metrics for {doi}".format(doi=self.doi)
             else:
-                self.error = u"got unexpected status_code code {}".format(r.status_code)
+                self.error = u"got unexpected altmetric status_code code {}".format(r.status_code)
 
         except (KeyboardInterrupt, SystemExit):
             # let these ones through, don't save anything to db
@@ -645,31 +681,6 @@ class Product(db.Model):
         except (KeyError, TypeError):
             pass
 
-    def set_in_doaj(self):
-        self.in_doaj = False
-        try:
-            issns = self.crossref_api_raw["ISSN"]
-            for issn in issns:
-                if issn in get_oa_issns():
-                    self.in_doaj = True
-            # print u"set in_doaj", self.in_doaj
-        except (KeyError, TypeError):
-            pass
-
-    @property
-    def is_open_property(self):
-        return (self.is_oa_journal or self.is_oa_repository)
-
-    @property
-    def is_oa_journal(self):
-        return self.in_doaj
-
-    @property
-    def is_oa_repository(self):
-        if self.doi:
-            if any(fragment in self.doi for fragment in open_doi_fragments):
-                return True
-        return False
 
     @property
     def sources(self):
@@ -724,16 +735,24 @@ class Product(db.Model):
         resp = defaultdict(int)
         title_lookup = {
             "Librarian": "Librarian",
+            "Student  > Bachelor": "Undergrad Student",
             "Student (Bachelor)": "Undergrad Student",
             "Student (Master)": "Masters Student",
             "Student (Postgraduate)": "Masters Student",
+            "Student  > Master": "Masters Student",
+            "Student  > Postgraduate": "Masters Student",
             "Doctoral Student": "PhD Student",
             "Ph.D. Student": "PhD Student",
+            "Student  > Doctoral Student": "PhD Student",
+            "Student  > Ph. D. Student": "PhD Student",
             "Post Doc": "Postdoc",
             "Professor": "Faculty",
             "Associate Professor": "Faculty",
             "Assistant Professor": "Faculty",
+            "Professor > Associate Professor": "Faculty",
+            "Professor > Assistant Professor": "Faculty",
             "Senior Lecturer": "Faculty",
+            "Lecturer > Senior Lecturer": "Faculty",
             "Lecturer": "Faculty",
             "Researcher (at an Academic Institution)": "Faculty",
             "Researcher (at a non-Academic Institution)": "Researcher (non-academic)",
@@ -939,7 +958,7 @@ class Product(db.Model):
     def clean_doi(self):
         # this shouldn't be necessary because we clean DOIs
         # before we put them in. however, there are a few legacy ones that were
-        # not fully cleaned. this is to deal with them.
+        # not fully cleaned. this igis to deal with them.
         return clean_doi(self.doi)
 
     def __repr__(self):
@@ -1005,6 +1024,41 @@ class Product(db.Model):
             pass
         return resp
 
+    @property
+    def issns(self):
+        try:
+            return self.crossref_api_raw["ISSN"]
+        except (AttributeError, TypeError, KeyError):
+            return None
+
+    def set_local_lookup_oa(self):
+        start_time = time()
+
+        open_reason = None
+        open_url = self.url
+
+
+        if oa.is_open_via_doaj_issn(self.issns):
+            open_reason = "doaj issn"
+        elif oa.is_open_via_doaj_journal(self.journal):
+            open_reason = "doaj journal"
+        elif oa.is_open_via_arxiv(self.arxiv):
+            open_reason = "arxiv"
+            open_url = u"http://arxiv.org/abs/{}".format(self.arxiv)  # override because open url isn't the base url
+        elif oa.is_open_via_datacite_prefix(self.doi):
+            open_reason = "datacite prefix"
+        elif oa.is_open_via_license_url(self.license_url):
+            open_reason = "license url"
+        elif oa.is_open_via_doi_fragment(self.doi):
+            open_reason = "doi fragment"
+        elif oa.is_open_via_url_fragment(self.url):
+            open_reason = "url fragment"
+
+        if open_reason:
+            self.fulltext_url = open_url
+            self.open_step = u"local lookup: {}".format(open_reason)
+
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -1016,7 +1070,7 @@ class Product(db.Model):
                 "mendeley_url": self.mendeley_url
             },
             "doi": self.doi,
-            "url": u"http://doi.org/{}".format(self.doi),
+            "url": self.url,
             "orcid_id": self.orcid_id,
             "year": self.year,
             "_title": self.display_title,  # duplicate just for api reading help
@@ -1028,16 +1082,13 @@ class Product(db.Model):
             "altmetric_score": self.altmetric_score,
             "num_posts": self.num_posts,
             "num_mentions": self.num_mentions,
-            "is_oa_journal": self.is_oa_journal,
-            "is_oa_repository": self.is_oa_repository,
-            "is_open": self.is_open_property,
-            "is_open_new": self.is_open,
-            "open_url": self.open_url,
-            "open_urls": self.open_urls,
             "sources": [s.to_dict() for s in self.sources],
             "posts": self.posts,
             "events_last_week_count": self.events_last_week_count,
-            "genre": self.guess_genre()
+            "genre": self.guess_genre(),
+            "is_open": self.has_fulltext_url,
+            "has_fulltext_url": self.has_fulltext_url,
+            "fulltext_url": self.fulltext_url
         }
 
 

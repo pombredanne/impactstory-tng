@@ -38,6 +38,13 @@ angular.module('aboutPages', [])
     })
 
     .config(function($routeProvider) {
+        $routeProvider.when('/sample', {
+            templateUrl: 'about-pages/sample.tpl.html',
+            controller: 'samplePageCtrl'
+        })
+    })
+
+    .config(function($routeProvider) {
         $routeProvider.when('/about/achievements', {
             templateUrl: 'about-pages/about-badges.tpl.html',
             controller: 'aboutPageCtrl',
@@ -71,6 +78,17 @@ angular.module('aboutPages', [])
             .success(function(resp){
                 $scope.numProfiles = resp.count
             })
+    })
+
+    .controller("samplePageCtrl", function($scope, $http){
+        console.log("sample page ctrl!")
+        $http.get("/api/products").success(
+            function(resp){
+                console.log("got /api/product resp back", resp)
+                $scope.products = resp.list
+            }
+        )
+
     })
 
 
@@ -276,6 +294,7 @@ angular.module('app').run(function($route,
             // user stuff for analytics
             percent_oa: percentOA,
             num_posts: resp.num_posts,
+            num_mentions: resp.num_mentions,
             num_products: resp.products.length,
             num_badges: resp.badges.length,
             num_twitter_followers: resp.num_twitter_followers,
@@ -917,6 +936,8 @@ angular.module('personPage', [
                                            $auth,
                                            $mdDialog,
                                            $location,
+                                           $timeout,
+                                           $sce,
                                            Person,
                                            personResp){
 
@@ -942,6 +963,63 @@ angular.module('personPage', [
 
         $scope.profileStatus = "all_good"
         $scope.tab =  $routeParams.tab || "overview"
+
+        // overview tab
+        if (!$routeParams.tab){
+            $scope.tab = "overview"
+        }
+
+        // someone is linking to a specific badge. show overview page behind a popup
+        else if ($routeParams.tab == "a") {
+            $scope.tab = "achievements"
+            var badgeName = $routeParams.filter
+            console.log("show the badges modal, for this badge", badgeName)
+
+
+            var badgeToShow = _.find(Person.d.badges, function(badge){
+                return badgeName == badge.display_name.toLowerCase().replace(" ", "-")
+            })
+            var badgeDialogCtrl = function($scope){
+                $scope.badge = badgeToShow
+
+                // this dialog has isolate scope so doesn't inherit this function
+                // from the application scope.
+                $scope.trustHtml = function(str){
+                    return $sce.trustAsHtml(str)
+                }
+                $scope.cancel = function() {
+                    $mdDialog.cancel();
+                };
+                $scope.firstName = Person.d.first_name
+            }
+
+            var dialogOptions = {
+                clickOutsideToClose: true,
+                templateUrl: 'badgeDialog.tpl.html',
+                controller: badgeDialogCtrl
+            }
+
+
+            var showDialog = function(){
+                $mdDialog.show(dialogOptions).then(function(result) {
+                    console.log("ok'd the setFulltextUrl dialog")
+
+                }, function() {
+                    console.log("cancelled the setFulltextUrl dialog")
+                    $location.url("u/" + Person.d.orcid_id + "/achievements")
+                });
+            }
+
+            $timeout(showDialog, 0)
+
+
+        }
+
+        // the other tabs
+        else {
+            $scope.tab = $routeParams.tab
+        }
+
         $scope.userForm = {}
 
         if (ownsThisProfile && !Person.d.email ) {
@@ -962,6 +1040,7 @@ angular.module('personPage', [
         else {
             $scope.showMendeleyDetails = false
         }
+
 
 
         var reloadWithNewEmail = function(){
@@ -1064,6 +1143,17 @@ angular.module('personPage', [
 
         }
 
+        $scope.shareBadge = function(badgeName){
+            window.Intercom('trackEvent', 'tweeted-badge', {
+                name: badgeName
+            });
+            var myOrcid = $auth.getPayload().sub // orcid ID
+            window.Intercom("update", {
+                user_id: myOrcid,
+                latest_tweeted_badge: badgeName
+            })
+        }
+
 
 
 
@@ -1138,7 +1228,6 @@ angular.module('personPage', [
                 percent: countryPair[1]
             }
         })
-        console.log("$scope.mendeleyCountries", $scope.mendeleyCountries)
 
         $scope.mendeleyDisciplines = _.map(_.pairs(Person.d.mendeley.subdiscipline_percent), function(pair){
             return {
@@ -1146,7 +1235,6 @@ angular.module('personPage', [
                 percent: pair[1]
             }
         })
-        console.log("$scope.mendeleyDisciplines", $scope.mendeleyDisciplines)
 
         $scope.postsFilter = function(post){
             if ($scope.selectedChannel) {
@@ -1249,6 +1337,10 @@ angular.module('personPage', [
             }
         }
 
+        //$scope.showBadgeDialog = function(displayName){
+        //    console.log("show badge dialog!", displayName)
+        //    $location.url("u/" + Person.d.orcid_id + "/a/" + displayName.toLowerCase().replace(" ", "-"))
+        //}
 
 
 
@@ -1305,12 +1397,15 @@ angular.module('productPage', [
                                            $location,
                                            $http,
                                            $mdDialog,
-                                           $location,
+                                           $auth,
                                            Person,
                                            personResp){
 
 
         var possibleChannels = _.pluck(Person.d.sources, "source_name")
+
+        var ownsThisProfile = $auth.isAuthenticated() && $auth.getPayload().sub == Person.d.orcid_id
+
         var id
         id = $routeParams.id
         var product = _.findWhere(Person.d.products, {id: id})
@@ -1322,7 +1417,10 @@ angular.module('productPage', [
         $scope.person = Person.d
         $scope.sources = product.sources
         $scope.product = product
+        $scope.displayGenre = product.genre.replace("-", " ")
+        $scope.ownsThisProfile = ownsThisProfile
         $scope.d = {}
+
 
         console.log("$scope.product", $scope.product, $routeParams.filter)
 
@@ -1395,8 +1493,9 @@ angular.module('productPage', [
             $scope.postsSum += v.posts_count
         })
 
+
         $scope.d.postsLimit = 20
-        $scope.selectedChannel = _.findWhere(Person.d.sources, {source_name: $routeParams.filter})
+        $scope.selectedChannel = _.findWhere($scope.sources, {source_name: $routeParams.filter})
 
         $scope.toggleSelectedChannel = function(channel){
             console.log("toggling selected channel", channel)
@@ -1407,6 +1506,26 @@ angular.module('productPage', [
             else {
                 $location.url(rootUrl + "/" + channel.source_name)
             }
+        }
+
+        $scope.setFulltextUrl = function(ev){
+            console.log("stetting fulltext url for ", id)
+            var confirm = $mdDialog.prompt()
+                .clickOutsideToClose(true)
+                .title('Add link to free fulltext')
+                .textContent("(No free fulltext anywhere? Consider uploading this work to an open repository like Zenodo or Figshare.)")
+                .placeholder("What's the free fulltext URL?")
+                .targetEvent(ev)
+                .ok('Okay!')
+                .cancel('Cancel');
+
+            $mdDialog.show(confirm).then(function(result) {
+                Person.setFulltextUrl(id, result)
+
+
+            }, function() {
+                console.log("cancelled the setFulltextUrl dialog")
+            });
         }
 
 
@@ -1589,7 +1708,7 @@ angular.module('person', [
 
 
 
-    .factory("Person", function($http, $q){
+    .factory("Person", function($http, $q, $route){
 
         var data = {}
         var badgeSortLevel = {
@@ -1620,30 +1739,63 @@ angular.module('person', [
             console.log("Person Service getting from server:", orcidId)
             return $http.get(url).success(function(resp){
 
-                // clear the data object
+                // clear the data object and put the new data in
                 for (var member in data) delete data[member];
-
-                // put the response in the data object
-                _.each(resp, function(v, k){
-                    data[k] = v
-                })
-
-                // add computed properties
-
-                // total posts
-                var postCounts = _.pluck(data.sources, "posts_count")
-                data.numPosts = postCounts.reduce(function(a, b){return a + b}, 0)
-
-                // date of earliest publication
-                var earliestPubYear = _.min(_.pluck(data.products, "year"))
-                if (earliestPubYear > 0 && earliestPubYear <= 2015) {
-                    data.publishingAge = 2016 - earliestPubYear
-                }
-                else {
-                    data.publishingAge = 1
-                }
+                overwriteData(resp)
 
             })
+        }
+
+        function overwriteData(newData){
+            // put the response in the data object
+            _.each(newData, function(v, k){
+                data[k] = v
+            })
+
+            // add computed properties
+
+            // total posts
+            var postCounts = _.pluck(data.sources, "posts_count")
+            data.numPosts = postCounts.reduce(function(a, b){return a + b}, 0)
+
+            // date of earliest publication
+            var earliestPubYear = _.min(_.pluck(data.products, "year"))
+            if (earliestPubYear > 0 && earliestPubYear <= 2015) {
+                data.publishingAge = 2016 - earliestPubYear
+            }
+            else {
+                data.publishingAge = 1
+            }
+        }
+
+        function setFulltextUrl(productId, fulltextUrl) {
+            _.each(data.products, function(myProduct){
+                if (myProduct.id == productId){
+                    myProduct.fulltext_url = fulltextUrl
+                }
+            });
+            // todo un-hardcode this
+            var apiUrl = "https://impactstory.org/api/person/" + data.orcid_id
+            var postBody = {
+                product: {
+                    id: productId,
+                    fulltext_url: fulltextUrl
+                }
+            }
+
+            $http.post(apiUrl, postBody)
+                .success(function(resp){
+                    console.log("we set the fulltext url!", resp)
+                    overwriteData(resp)
+
+                    // todo: figure out if we actually need this
+                    $route.reload()
+                })
+                .error(function(resp){
+                    console.log("we failed to set the fulltext url", resp)
+                    $route.reload()
+                })
+
         }
 
 
@@ -1669,6 +1821,7 @@ angular.module('person', [
                 })
             },
             getBadgesWithConfigs: getBadgesWithConfigs,
+            setFulltextUrl: setFulltextUrl,
             reload: function(){
                 return load(data.orcid_id, true)
             }
@@ -1797,7 +1950,6 @@ angular.module('settingsPage', [
             $http.post("/api/person/" + myOrcidId)
                 .success(function(resp){
                     // force a reload of the person
-                    Intercom('trackEvent', 'synced');
                     Intercom('trackEvent', 'synced-to-edit');
                     $rootScope.sendToIntercom(resp)
                     Person.load(myOrcidId, true).then(
@@ -1960,7 +2112,7 @@ angular.module('staticPages', [
 
 
 
-angular.module('templates.app', ['about-pages/about-badges.tpl.html', 'about-pages/about-data.tpl.html', 'about-pages/about-legal.tpl.html', 'about-pages/about-orcid.tpl.html', 'about-pages/about.tpl.html', 'about-pages/search.tpl.html', 'badge-page/badge-page.tpl.html', 'footer/footer.tpl.html', 'header/header.tpl.html', 'header/search-result.tpl.html', 'helps.tpl.html', 'loading.tpl.html', 'person-page/person-page-text.tpl.html', 'person-page/person-page.tpl.html', 'product-page/product-page.tpl.html', 'settings-page/settings-page.tpl.html', 'sidemenu.tpl.html', 'static-pages/landing.tpl.html', 'static-pages/login.tpl.html', 'static-pages/twitter-login.tpl.html', 'workspace.tpl.html']);
+angular.module('templates.app', ['about-pages/about-badges.tpl.html', 'about-pages/about-data.tpl.html', 'about-pages/about-legal.tpl.html', 'about-pages/about-orcid.tpl.html', 'about-pages/about.tpl.html', 'about-pages/sample.tpl.html', 'about-pages/search.tpl.html', 'badge-page/badge-page.tpl.html', 'footer/footer.tpl.html', 'header/header.tpl.html', 'header/search-result.tpl.html', 'helps.tpl.html', 'loading.tpl.html', 'person-page/person-page-text.tpl.html', 'person-page/person-page.tpl.html', 'product-page/product-page.tpl.html', 'settings-page/settings-page.tpl.html', 'sidemenu.tpl.html', 'static-pages/landing.tpl.html', 'static-pages/login.tpl.html', 'static-pages/twitter-login.tpl.html', 'workspace.tpl.html']);
 
 angular.module("about-pages/about-badges.tpl.html", []).run(["$templateCache", function($templateCache) {
   $templateCache.put("about-pages/about-badges.tpl.html",
@@ -1993,18 +2145,12 @@ angular.module("about-pages/about-badges.tpl.html", []).run(["$templateCache", f
     "                        research online. What's the quality of the discussion, who is having it, and where?\n" +
     "                </p>\n" +
     "                <p class=\"def openness\" ng-show=\"badgeGroup.name=='openness'\">\n" +
-    "                    <strong>Openness</strong> looks at how easy it is for people to actually read and use\n" +
-    "                    your research; publishing in Open Access venues is a big part of this, but so is\n" +
-    "                    publishing open data and code, and publishing in ways that build lay and practioner\n" +
-    "                    audiences.\n" +
-    "\n" +
+    "                    <strong>Openness</strong> makes it easy for people to read and use\n" +
+    "                    your research.\n" +
     "                </p>\n" +
     "                <p class=\"def fun\" ng-show=\"badgeGroup.name=='fun'\">\n" +
     "                    <strong>Fun</strong> achievements are Not So Serious.\n" +
-    "\n" +
     "                </p>\n" +
-    "\n" +
-    "\n" +
     "            </div>\n" +
     "            <div class=\"badges-wrapper row\"\n" +
     "                 ng-include=\"'badge-item.tpl.html'\"\n" +
@@ -2030,40 +2176,80 @@ angular.module("about-pages/about-badges.tpl.html", []).run(["$templateCache", f
 angular.module("about-pages/about-data.tpl.html", []).run(["$templateCache", function($templateCache) {
   $templateCache.put("about-pages/about-data.tpl.html",
     "<div class=\"page about about-data\">\n" +
-    "\n" +
+    "    <h2>About the data</h2>\n" +
     "\n" +
     "\n" +
     "    <h3 id=\"data-sources\">Data sources</h3>\n" +
-    "    <p>\n" +
-    "        We're currently working on this section. Stay tuned...\n" +
-    "    </p>\n" +
+    "    <ul>\n" +
+    "        <li>\n" +
+    "            <a href=\"http://www.altmetric.com\">Altmetric</a> supplies most of our data for tracking the online\n" +
+    "            impact of publications.\n" +
+    "        </li>\n" +
+    "        <li>\n" +
+    "            <a href=\"https://www.base-search.net/\">BASE</a> helps us find free fulltext for articles.\n" +
+    "        </li>\n" +
+    "        <li>\n" +
+    "            <a href=\"http://dev.mendeley.com\">Mendeley</a> gives us information about how articles are saved on their\n" +
+    "            reference manager platform.\n" +
+    "        </li>\n" +
+    "        <li>\n" +
+    "            <a href=\"http://www.crossref.org\">CrossRef</a> helps us find metadata for articles that have DOIs.\n" +
+    "        </li>\n" +
+    "        <li>\n" +
+    "            <a href=\"http://www.orcid.org\">ORCID</a> provides researcher identity management services that form the backbone\n" +
+    "            of our profile system.\n" +
+    "        </li>\n" +
+    "        <li>\n" +
+    "            <a href=\"http://twitter.com\">Twitter</a> supplies a convenient identity provider for signin (also, more Twitter\n" +
+    "            analytics are on the roadmap).\n" +
+    "        </li>\n" +
+    "    </ul>\n" +
+    "\n" +
+    "    <!--\n" +
     "    <h3 id=\"metrics\">Metrics</h3>\n" +
     "    <p>\n" +
     "        We're currently working on this section. Stay tuned...\n" +
     "    </p>\n" +
+    "    -->\n" +
+    "\n" +
     "    <h3 id=\"publications\">Publications</h3>\n" +
     "    <p>\n" +
-    "        Impactstory imports all your Public works on ORCID that have DOIs (A <a\n" +
-    "            href=\"http://www.apastyle.org/learn/faqs/what-is-doi.aspx\">DOI</a> is a unique\n" +
-    "        ID assigned to most scholarly articles, as well as many other products like datasets and figures).\n" +
-    "    </p>\n" +
-    "    <p>\n" +
-    "        Sometimes a publication might show up on your ORCID, but not on Impactstory. Here's a troubleshooting checklist:\n" +
+    "        Impactstory uses ORCID to find and import your scholarly works.\n" +
+    "        Are you missing publications on Impactstory? Here's how to fix it.\n" +
     "    </p>\n" +
     "    <div class=\"ways-to-fix-missing-publications\">\n" +
-    "        <h4><i class=\"fa fa-check\"></i>Make your works Public on ORCID</h4>\n" +
+    "        <h4>\n" +
+    "            <strong>1.</strong>\n" +
+    "            Get your publications into your ORCID</h4>\n" +
     "        <p>\n" +
-    "            Impactstory can't see your works unless their privacy is set to Public. Luckily, that's easy to do:\n" +
-    "            <img src=\"static/img/gif/orcid-set-public.gif\" width=\"400\">\n" +
-    "        </p>\n" +
-    "        <h4><i class=\"fa fa-check\"></i>Make sure your works have DOIs on ORCID</h4>\n" +
-    "        <p>\n" +
-    "            Impactstory needs DOIs to work.\n" +
-    "            But if you entered your ORCID works via BibTeX in the past, the DOIs for your works may have\n" +
-    "            not been added correctly. You can fix that by re-adding the works using ORCID's <em>Scopus</em>\n" +
-    "            importer; these will import the works again, but this time with DOIs:\n" +
+    "            Since we import from ORCID, if your ORCID is missing articles then so are we.\n" +
+    "            Visit your ORCID to make sure it's got all your work. If not,\n" +
+    "            use their <em>Scopus</em> importer to remedy that situation:\n" +
     "            <img src=\"static/img/gif/orcid-import-scopus.gif\" width=\"400\">\n" +
     "        </p>\n" +
+    "\n" +
+    "        <h4>\n" +
+    "            <strong>2.</strong>\n" +
+    "            Ensure your works are Public on ORCID\n" +
+    "        </h4>\n" +
+    "        <p>\n" +
+    "            Once you've got all your publications on your ORCID, we need to make sure\n" +
+    "            Impactstory can see them. To do that, make sure their privacy is set to Public.\n" +
+    "            If not, it's easy to fix:\n" +
+    "            <img src=\"static/img/gif/orcid-set-public.gif\" width=\"400\">\n" +
+    "        </p>\n" +
+    "        <h4>\n" +
+    "            <strong>3.</strong>\n" +
+    "            Re-sync Impactstory ORCID\n" +
+    "        </h4>\n" +
+    "        <p>\n" +
+    "           If you've made any changes to your ORCID, they'll get synced over to Impactstory\n" +
+    "            automatically within 24 hours. Or if you're feeling like some instant gratification,\n" +
+    "            you can sync manually from your Settings page: just click the\n" +
+    "            <i class=\"fa fa-gear\"></i> icon at the top right of the page, then\n" +
+    "            click \"Sync with my ORCID now.\"\n" +
+    "        </p>\n" +
+    "        <!--\n" +
     "        <h4><i class=\"fa fa-check\"></i>Get DOIs for your remaining works</h4>\n" +
     "        <p>\n" +
     "            Some small publishers don't assign DOIs. Neither do YouTube, SlideShare, or\n" +
@@ -2076,12 +2262,9 @@ angular.module("about-pages/about-data.tpl.html", []).run(["$templateCache", fun
     "                Archive your articles, slides, datasets, and more.\n" +
     "            </a>\n" +
     "        </p>\n" +
+    "        -->\n" +
     "    </div>\n" +
     "\n" +
-    "    <h3 id=\"engagement-score\">Engagement score</h3>\n" +
-    "    <p>\n" +
-    "        We're currently working on this section. Stay tuned...\n" +
-    "    </p>\n" +
     "\n" +
     "</div>");
 }]);
@@ -2142,8 +2325,14 @@ angular.module("about-pages/about.tpl.html", []).run(["$templateCache", function
     "          incorporated as a 501(c)(3) nonprofit corporation.\n" +
     "       </p>\n" +
     "       <p>\n" +
-    "           You can contact us via <a href=\"mailto:team@impactstory.org\">email</a> or\n" +
+    "           Contact us via <a href=\"mailto:team@impactstory.org\">email</a> or\n" +
     "           <a href=\"http://twitter.com/impactstory\">Twitter.</a>\n" +
+    "\n" +
+    "       </p>\n" +
+    "       <p>\n" +
+    "           Learn more on our\n" +
+    "           <a href=\"about/data\">data sources</a> and\n" +
+    "           <a href=\"about/achievements\">achievements</a> pages.\n" +
     "       </p>\n" +
     "\n" +
     "      <!--\n" +
@@ -2226,6 +2415,29 @@ angular.module("about-pages/about.tpl.html", []).run(["$templateCache", function
     "\n" +
     "\n" +
     "   </div><!-- end wrapper -->\n" +
+    "</div>");
+}]);
+
+angular.module("about-pages/sample.tpl.html", []).run(["$templateCache", function($templateCache) {
+  $templateCache.put("about-pages/sample.tpl.html",
+    "<div class=\"page products-sample\">\n" +
+    "    <h2>Here's a sample of {{ products.length }} articles</h2>\n" +
+    "\n" +
+    "    <div class=\"main\">\n" +
+    "        <div class=\"product row\" ng-repeat=\"product in products\">\n" +
+    "            <div class=\"id col-xs-2\">{{ product.id }}</div>\n" +
+    "            <div class=\"link col-xs-10\">\n" +
+    "                <a href=\"http://doi.org/{{ product.doi }}\">{{ product.title }}</a>\n" +
+    "\n" +
+    "            </div>\n" +
+    "\n" +
+    "        </div>\n" +
+    "\n" +
+    "\n" +
+    "\n" +
+    "\n" +
+    "\n" +
+    "    </div>\n" +
     "</div>");
 }]);
 
@@ -2564,7 +2776,7 @@ angular.module("loading.tpl.html", []).run(["$templateCache", function($template
   $templateCache.put("loading.tpl.html",
     "<div id=\"loading\">\n" +
     "     <md-progress-circular class=\"md-primary\"\n" +
-    "                           md-diameter=\"170\">\n" +
+    "                           md-diameter=\"100px\">\n" +
     "     </md-progress-circular>\n" +
     "</div>");
 }]);
@@ -2744,6 +2956,7 @@ angular.module("person-page/person-page.tpl.html", []).run(["$templateCache", fu
     "                            <span class=\"subscore {{ subscore.name }}\"\n" +
     "                                  ng-class=\"{ unselected: selectedSubscore && selectedSubscore.name != subscore.name}\"\n" +
     "                                  ng-click=\"toggleSeletedSubscore(subscore)\"\n" +
+    "                                  ng-show=\"subscore.badgesCount\"\n" +
     "                                  ng-repeat=\"subscore in subscores | orderBy: 'sortOrder' | filter: { name: '!fun' }\">\n" +
     "                                <i class=\"fa fa-{{ getBadgeIcon(subscore.name) }}\"></i>\n" +
     "                                <span class=\"number\">{{ subscore.badgesCount }}</span>\n" +
@@ -2961,10 +3174,8 @@ angular.module("person-page/person-page.tpl.html", []).run(["$templateCache", fu
     "\n" +
     "\n" +
     "                        <span class=\"def openness\" ng-show=\"selectedSubscore.name=='openness'\">\n" +
-    "                            <strong>Openness</strong> looks at how easy it is for people to actually read and use\n" +
-    "                            your research; publishing in <a href=\"https://en.wikipedia.org/wiki/Open_access\">Open Access</a>\n" +
-    "                            venues is a big part of this, but so is publishing open data and code, and publishing in ways that build lay and practitioner\n" +
-    "                            audiences.\n" +
+    "                            <strong>Openness</strong> makes it easy for people to read and use\n" +
+    "                            your research.\n" +
     "                        </span>\n" +
     "\n" +
     "                        <span class=\"def fun\" ng-show=\"selectedSubscore.name=='fun'\">\n" +
@@ -3033,10 +3244,7 @@ angular.module("person-page/person-page.tpl.html", []).run(["$templateCache", fu
     "                        </span>\n" +
     "                        <span class=\"val\" ng-show=\"subscore.badgesCount\">({{ subscore.badgesCount }})</span>\n" +
     "                    </span>\n" +
-    "\n" +
     "                </div>\n" +
-    "\n" +
-    "\n" +
     "            </div>\n" +
     "        </div>\n" +
     "\n" +
@@ -3220,9 +3428,19 @@ angular.module("person-page/person-page.tpl.html", []).run(["$templateCache", fu
     "\n" +
     "        </div>\n" +
     "    </div>\n" +
-    "\n" +
-    "\n" +
     "</div>\n" +
+    "\n" +
+    "<script type=\"text/ng-template\" id=\"badgeDialog.tpl.html\">\n" +
+    "    <md-dialog id=\"badgeDialog\">\n" +
+    "        <md-dialog-content>\n" +
+    "            <h2>Check it out! {{ firstName }} unlocked this nifty achievement:</h2>\n" +
+    "            <div class=\"badge-container\" ng-include=\"'badge-item.tpl.html'\"></div>\n" +
+    "        </md-dialog-content>\n" +
+    "        <md-dialog-actions>\n" +
+    "            <md-button ng-click=\"cancel()\">Dismiss</md-button>\n" +
+    "        </md-dialog-actions>\n" +
+    "    </md-dialog>\n" +
+    "</script>\n" +
     "\n" +
     "");
 }]);
@@ -3236,6 +3454,10 @@ angular.module("product-page/product-page.tpl.html", []).run(["$templateCache", 
     "                <i class=\"fa fa-chevron-left\"></i>\n" +
     "                Back to {{ person.first_name }}'s publications\n" +
     "            </a>\n" +
+    "            <div class=\"genre\" ng-show=\"product.genre != 'article' && product.genre != 'other'\">\n" +
+    "                <i class=\"fa fa-{{ getGenreIcon(product.genre) }}\"></i>\n" +
+    "                {{ product.genre.replace(\"-\", \" \") }}\n" +
+    "            </div>\n" +
     "            <h2 class=\"title\">\n" +
     "                {{ product.title }}\n" +
     "            </h2>\n" +
@@ -3264,31 +3486,18 @@ angular.module("product-page/product-page.tpl.html", []).run(["$templateCache", 
     "\n" +
     "            </div>\n" +
     "\n" +
-    "            <div class=\"type\">\n" +
-    "                <span class=\"oa\" ng-show=\"product.is_oa_repository\">\n" +
+    "            <div class=\"fulltext\" ng-show=\"product.fulltext_url\">\n" +
+    "                <a href=\"{{ product.fulltext_url }}\">\n" +
     "                    <i class=\"fa fa-unlock-alt\"></i>\n" +
-    "                    Open access\n" +
-    "                </span>\n" +
-    "                <span class=\"oa\" ng-show=\"product.is_oa_journal\">\n" +
-    "                    <i class=\"fa fa-unlock-alt\"></i>\n" +
-    "                    Open Access\n" +
-    "                </span>\n" +
-    "                <span class=\"genre\" ng-show=\"product.genre != 'article'\">\n" +
-    "                    <!--\n" +
-    "                    <i class=\"fa fa-{{ getGenreIcon(product.genre) }}\"></i>\n" +
-    "                    -->\n" +
-    "                    {{ product.genre }}\n" +
-    "                </span>\n" +
-    "\n" +
-    "\n" +
-    "            </div>\n" +
-    "            <div class=\"score\" ng-show=\"product.altmetric_score\">\n" +
-    "                <a href=\"https://www.altmetric.com/details/{{ product.altmetric_id }}\"\n" +
-    "                   class=\"ti-label\">\n" +
-    "                    <img src=\"static/img/favicons/altmetric.ico\" alt=\"\">\n" +
-    "                    <span class=\"val\">{{ numFormat.short(product.altmetric_score) }}</span>\n" +
-    "                    <span class=\"ti-label\">Altmetric.com score</span>\n" +
+    "                    Free fulltext available\n" +
+    "                    <i class=\"fa fa-external-link\"></i>\n" +
     "                </a>\n" +
+    "            </div>\n" +
+    "            <div class=\"no-fulltext\" ng-show=\"!product.fulltext_url && ownsThisProfile\">\n" +
+    "                <div class=\"btn btn-default\" ng-click=\"setFulltextUrl($event)\">\n" +
+    "                    <i class=\"fa fa-link\"></i>\n" +
+    "                    Add a link to free fulltext\n" +
+    "                </div>\n" +
     "            </div>\n" +
     "        </div>\n" +
     "    </div>\n" +
@@ -3306,8 +3515,7 @@ angular.module("product-page/product-page.tpl.html", []).run(["$templateCache", 
     "                    <a href=\"https://en.wikipedia.org/wiki/Digital_object_identifier\">\n" +
     "                        this standard unique identifier,\n" +
     "                    </a>\n" +
-    "                    it's hard to track any conversations about the work online or determine its\n" +
-    "                    open access status.\n" +
+    "                    it's harder to track online conversations about the work.\n" +
     "                </p>\n" +
     "                <p>\n" +
     "                    If you've\n" +
@@ -3629,7 +3837,7 @@ angular.module("static-pages/login.tpl.html", []).run(["$templateCache", functio
     "<div class=\"login-loading main\">\n" +
     "  <div class=\"content\">\n" +
     "     <md-progress-circular class=\"md-primary\"\n" +
-    "                           md-diameter=\"170\">\n" +
+    "                           md-diameter=\"100\">\n" +
     "     </md-progress-circular>\n" +
     "     <h2>Getting your profile...</h2>\n" +
     "     <img src=\"static/img/impactstory-logo-sideways.png\">\n" +
@@ -3642,7 +3850,7 @@ angular.module("static-pages/twitter-login.tpl.html", []).run(["$templateCache",
     "<div class=\"login-loading twitter\">\n" +
     "  <div class=\"content\">\n" +
     "     <md-progress-circular class=\"md-primary\"\n" +
-    "                           md-diameter=\"170\">\n" +
+    "                           md-diameter=\"100\">\n" +
     "     </md-progress-circular>\n" +
     "     <h2>Setting your Twitter...</h2>\n" +
     "     <img src=\"static/img/impactstory-logo-sideways.png\">\n" +

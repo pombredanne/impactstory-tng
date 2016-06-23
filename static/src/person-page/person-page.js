@@ -52,6 +52,8 @@ angular.module('personPage', [
                                            $auth,
                                            $mdDialog,
                                            $location,
+                                           $timeout,
+                                           $sce,
                                            Person,
                                            personResp){
 
@@ -77,6 +79,63 @@ angular.module('personPage', [
 
         $scope.profileStatus = "all_good"
         $scope.tab =  $routeParams.tab || "overview"
+
+        // overview tab
+        if (!$routeParams.tab){
+            $scope.tab = "overview"
+        }
+
+        // someone is linking to a specific badge. show overview page behind a popup
+        else if ($routeParams.tab == "a") {
+            $scope.tab = "achievements"
+            var badgeName = $routeParams.filter
+            console.log("show the badges modal, for this badge", badgeName)
+
+
+            var badgeToShow = _.find(Person.d.badges, function(badge){
+                return badgeName == badge.display_name.toLowerCase().replace(" ", "-")
+            })
+            var badgeDialogCtrl = function($scope){
+                $scope.badge = badgeToShow
+
+                // this dialog has isolate scope so doesn't inherit this function
+                // from the application scope.
+                $scope.trustHtml = function(str){
+                    return $sce.trustAsHtml(str)
+                }
+                $scope.cancel = function() {
+                    $mdDialog.cancel();
+                };
+                $scope.firstName = Person.d.first_name
+            }
+
+            var dialogOptions = {
+                clickOutsideToClose: true,
+                templateUrl: 'badgeDialog.tpl.html',
+                controller: badgeDialogCtrl
+            }
+
+
+            var showDialog = function(){
+                $mdDialog.show(dialogOptions).then(function(result) {
+                    console.log("ok'd the setFulltextUrl dialog")
+
+                }, function() {
+                    console.log("cancelled the setFulltextUrl dialog")
+                    $location.url("u/" + Person.d.orcid_id + "/achievements")
+                });
+            }
+
+            $timeout(showDialog, 0)
+
+
+        }
+
+        // the other tabs
+        else {
+            $scope.tab = $routeParams.tab
+        }
+
         $scope.userForm = {}
 
         if (ownsThisProfile && !Person.d.email ) {
@@ -97,6 +156,7 @@ angular.module('personPage', [
         else {
             $scope.showMendeleyDetails = false
         }
+
 
 
         var reloadWithNewEmail = function(){
@@ -199,6 +259,17 @@ angular.module('personPage', [
 
         }
 
+        $scope.shareBadge = function(badgeName){
+            window.Intercom('trackEvent', 'tweeted-badge', {
+                name: badgeName
+            });
+            var myOrcid = $auth.getPayload().sub // orcid ID
+            window.Intercom("update", {
+                user_id: myOrcid,
+                latest_tweeted_badge: badgeName
+            })
+        }
+
 
 
 
@@ -273,7 +344,6 @@ angular.module('personPage', [
                 percent: countryPair[1]
             }
         })
-        console.log("$scope.mendeleyCountries", $scope.mendeleyCountries)
 
         $scope.mendeleyDisciplines = _.map(_.pairs(Person.d.mendeley.subdiscipline_percent), function(pair){
             return {
@@ -281,7 +351,6 @@ angular.module('personPage', [
                 percent: pair[1]
             }
         })
-        console.log("$scope.mendeleyDisciplines", $scope.mendeleyDisciplines)
 
         $scope.postsFilter = function(post){
             if ($scope.selectedChannel) {
@@ -384,6 +453,10 @@ angular.module('personPage', [
             }
         }
 
+        //$scope.showBadgeDialog = function(displayName){
+        //    console.log("show badge dialog!", displayName)
+        //    $location.url("u/" + Person.d.orcid_id + "/a/" + displayName.toLowerCase().replace(" ", "-"))
+        //}
 
 
 

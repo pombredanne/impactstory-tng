@@ -8,6 +8,7 @@
 html body {
   font-size: 16px;
   font-family: "Lato", sans-serif;
+  height: auto;
 }
 html body .container-fluid {
   max-width: 993px;
@@ -20,8 +21,7 @@ html body span:focus {
   border: 0;
 }
 html body div:focus {
-  outline: none;
-  border: 0;
+  outline: none !important;
 }
 html body td:focus {
   outline: none;
@@ -656,6 +656,13 @@ div.page.product-page div.tab-controls a {
   display: inline-block;
   border-bottom: 3px solid transparent;
 }
+@media only screen and (max-width: 992px) {
+  div.page.person div.tab-controls a,
+  div.page.product-page div.tab-controls a {
+    font-weight: bold;
+    padding: 7px;
+  }
+}
 div.page.person div.tab-controls a:hover,
 div.page.product-page div.tab-controls a:hover {
   text-decoration: none;
@@ -664,6 +671,12 @@ div.page.person div.tab-controls a.selected-true,
 div.page.product-page div.tab-controls a.selected-true {
   color: #ff4000;
   border-bottom: 3px solid #ff4000;
+}
+@media only screen and (max-width: 992px) {
+  div.page.person div.tab-controls a.selected-true,
+  div.page.product-page div.tab-controls a.selected-true {
+    border: none;
+  }
 }
 div.page.person .tab-view,
 div.page.product-page .tab-view {
@@ -887,6 +900,22 @@ div.page.product-page .tab-view.overview .widget.mentions .channels .channel .ne
 div.page.person .tab-view.overview .widget.publications .title,
 div.page.product-page .tab-view.overview .widget.publications .title {
   font-size: 16px;
+}
+div.page.person .tab-view.overview .widget.publications .fulltext .val,
+div.page.product-page .tab-view.overview .widget.publications .fulltext .val {
+  display: none;
+}
+div.page.person .tab-view.overview .widget.badges .achievement,
+div.page.product-page .tab-view.overview .widget.badges .achievement {
+  padding: 10px;
+}
+div.page.person .tab-view.overview .widget.badges .achievement .under,
+div.page.product-page .tab-view.overview .widget.badges .achievement .under {
+  font-size: 14px;
+}
+div.page.person .tab-view.overview .widget.badges .achievement .share,
+div.page.product-page .tab-view.overview .widget.badges .achievement .share {
+  display: none;
 }
 div.page.person .tab-view.publications .main-col .title,
 div.page.product-page .tab-view.publications .main-col .title {
@@ -1136,6 +1165,10 @@ div.page.product-page .row.person-footer .buttons a.btn {
 .view-item.publication .content .title .extra {
   display: none;
 }
+.view-item.publication .content .fulltext a {
+  font-size: 12px;
+  margin-top: 5px;
+}
 .view-item.publication .content .source-icons a.sort-score {
   margin-right: 5px;
   vertical-align: -1px;
@@ -1153,6 +1186,26 @@ div.page.product-page .row.person-footer .buttons a.btn {
   opacity: 1;
   filter: none;
   -webkit-filter: none;
+}
+.view-item.achievement {
+  padding: 20px;
+}
+@media only screen and (max-width: 992px) {
+  .view-item.achievement {
+    display: block;
+  }
+  .view-item.achievement .icon {
+    float: left;
+  }
+  .view-item.achievement .content .title {
+    min-height: 64px;
+    margin-top: 15px;
+    margin-left: 65px;
+  }
+  .view-item.achievement .content .title .share {
+    display: block;
+    padding-top: 5px !important;
+  }
 }
 .view-item.achievement .group-engagement {
   color: #2196F3;
@@ -1175,6 +1228,7 @@ div.page.product-page .row.person-footer .buttons a.btn {
 }
 .view-item.achievement .icon {
   line-height: 1;
+  margin-top: 5px;
   min-width: 70px;
 }
 .view-item.achievement .icon img {
@@ -1185,8 +1239,26 @@ div.page.product-page .row.person-footer .buttons a.btn {
 .view-item.achievement .content .title {
   font-size: 20px;
 }
+.view-item.achievement .content .title .share {
+  margin-right: 10%;
+  font-size: 12px;
+  color: #777;
+  padding: 10px;
+}
+.view-item.achievement .content .title .share:hover {
+  text-decoration: underline;
+}
+.view-item.achievement .content .title .share i {
+  opacity: .5;
+}
+.view-item.achievement .content .under {
+  font-size: 15px;
+}
 .view-item.achievement .content .under .descr em.n {
   font-size: 120%;
+}
+.view-item.achievement .content .under .support {
+  font-size: 90%;
 }
 .view-item.achievement .content .under .support .more:hover {
   cursor: pointer;
@@ -1285,8 +1357,19 @@ div.page.settings-page div.setting-panel div.second-q h4 {
 .page.product-page .biblio-row .biblio-col {
   margin-bottom: 10px;
 }
+.page.product-page .biblio-row .biblio-col a.back-to-profile {
+  margin-bottom: 10px;
+  margin-left: -5px;
+  display: inline-block;
+}
+.page.product-page .biblio-row .biblio-col .genre {
+  font-size: 14px;
+}
+.page.product-page .biblio-row .biblio-col .genre i {
+  opacity: .8;
+}
 .page.product-page .biblio-row .biblio-col h2 {
-  margin-top: 10px;
+  margin-top: 0;
 }
 .page.product-page .biblio-row .biblio-col .journal {
   color: #333;
@@ -1294,29 +1377,17 @@ div.page.settings-page div.setting-panel div.second-q h4 {
 .page.product-page .biblio-row .biblio-col .journal a i {
   font-size: 60%;
 }
-.page.product-page .biblio-row .biblio-col .type {
-  font-size: 14px;
+.page.product-page .biblio-row .biblio-col .no-fulltext {
+  margin: 15px 0 10px;
 }
-.page.product-page .biblio-row .biblio-col .type .oa {
+.page.product-page .biblio-row .biblio-col .fulltext {
+  margin: 10px 0 5px;
+}
+.page.product-page .biblio-row .biblio-col .fulltext a {
   color: #fb9d00;
-  margin-right: 20px;
 }
-.page.product-page .biblio-row .biblio-col .type .genre {
-  display: block;
-}
-.page.product-page .biblio-row .biblio-col .score {
-  margin-top: 10px;
-}
-.page.product-page .biblio-row .biblio-col .score img {
-  margin-top: -5px;
-}
-.page.product-page .biblio-row .biblio-col .score .val {
-  font-size: 16px;
-  font-weight: bold;
-}
-.page.product-page .biblio-row .biblio-col .score a.ti-label {
-  font-size: 12px;
-  color: #333;
+.page.product-page .biblio-row .biblio-col .fulltext a i.fa-external-link {
+  font-size: 10px;
 }
 .page.product-page .main-row .tab-view .small-col {
   margin-top: 0px;
@@ -1335,6 +1406,8 @@ div.page.settings-page div.setting-panel div.second-q h4 {
 .page.about-page {
   max-width: 600px;
   margin: 100px auto;
+  font-size: 18px;
+  line-height: 1.6;
 }
 .page.about-page h3 {
   text-transform: capitalize;
@@ -1349,6 +1422,8 @@ div.page.settings-page div.setting-panel div.second-q h4 {
   height: 100px;
 }
 .page.about-data {
+  font-size: 18px;
+  line-height: 1.6;
   max-width: 600px;
   margin: 100px auto;
 }
@@ -1448,10 +1523,10 @@ div.page.settings-page div.setting-panel div.second-q h4 {
   position: fixed;
   top: 50%;
   left: 50%;
-  width: 200px;
-  height: 200px;
-  margin-top: -100px;
-  margin-left: -100px;
+  width: 100px;
+  height: 100px;
+  margin-top: -50px;
+  margin-left: -50px;
 }
 .login-loading {
   display: -webkit-flex;
@@ -1502,4 +1577,32 @@ div.page.settings-page div.setting-panel div.second-q h4 {
 .page.search .main p {
   margin-top: 10px;
   font-size: 18px;
+}
+.page.products-sample h2 {
+  margin-bottom: 20px;
+}
+.page.products-sample .product {
+  margin-bottom: 10px;
+}
+.page.products-sample .product .id {
+  font-size: 14px;
+  color: #999;
+}
+md-dialog {
+  max-width: 500px;
+}
+md-dialog#badgeDialog {
+  padding: 20px 10px 0;
+}
+md-dialog#badgeDialog h2 {
+  font-size: 17px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 15px;
+  text-align: center;
+}
+md-dialog#badgeDialog .title {
+  font-size: 24px;
+}
+md-dialog#badgeDialog .under {
+  font-size: 16px;
 }

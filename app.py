@@ -11,6 +11,7 @@ from sqlalchemy.pool import Pool
 from util import safe_commit
 from util import elapsed
 from util import HTTPMethodOverrideMiddleware
+from util import read_csv_file
 
 import logging
 import sys
@@ -18,6 +19,7 @@ import os
 import requests
 import redis
 import time
+import json
 from collections import defaultdict
 from rq import Queue
 
@@ -90,6 +92,12 @@ for i in range(0, 2):  # number of queues to spin up
         Queue("ti-queue-{}".format(i), connection=redis_rq_conn)
     )
 
+with open("data/doaj_issns.json", "r") as fh:
+    doaj_issns = json.load(fh)
+
+with open("data/doaj_titles.json", "r") as fh:
+    doaj_titles = json.load(fh)
+
 
 # imports got here for tables that need auto-created.
 # from models import temp_orcid_profile
@@ -98,6 +106,7 @@ for i in range(0, 2):  # number of queues to spin up
 # from models import person
 # from models import product
 # from models import badge
+# from models import refset
 #
 # db.create_all()
 # commit_success = safe_commit(db)

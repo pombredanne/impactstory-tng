@@ -10,8 +10,14 @@ import bisect
 import re
 import string
 import collections
+import csv
 
-
+def read_csv_file(filename):
+    print filename
+    with open(filename, "r") as csv_file:
+        my_reader = csv.DictReader(csv_file)
+        rows = [row for row in my_reader]
+    return rows
 
 class NoDoiException(Exception):
     pass
@@ -75,38 +81,67 @@ def replace_punctuation(text, sub):
     return u"".join(chars)
 
 
-def conversational_number(number):
+def word_for_num(num):
     words = {
-        "1.0": "one",
-        "2.0": "two",
-        "3.0": "three",
-        "4.0": "four",
-        "5.0": "five",
-        "6.0": "six",
-        "7.0": "seven",
-        "8.0": "eight",
-        "9.0": "nine",
+        1.0: "a",
+        2.0: "two",
+        3.0: "three",
+        4.0: "four",
+        5.0: "five",
+        6.0: "six",
+        7.0: "seven",
+        8.0: "eight",
+        9.0: "nine",
+        10.0: "ten",
+        11.0: "eleven",
+        12.0: "twelve"
     }
 
-    if number < 1:
+    try:
+        return words[float(num)]
+    except KeyError:
+        return "{}".format(num)
+
+
+def conversational_number(number):
+
+    if number == 0:
+        return "zero"
+
+    elif number < 1:
         return round(number, 2)
 
     elif number < 1000:
         return int(math.floor(number))
 
     elif number < 1000000:
-        divided = number / 1000.0
         unit = "thousand"
 
+        # floor of how many thousands we have, using Integer Division
+        num_units = number / 1000
+        is_exact = number % 1000 == 0
+
     else:
-        divided = number / 1000000.0
         unit = "million"
+        divided = number / 1000000.0
 
-    short_number = '{}'.format(round(divided, 2))[:-1]
-    if short_number in words:
-        short_number = words[short_number]
+        # floor (not round) to the nearest .1
+        # eg 1.21 = 1.2
+        # eg 1.29 = 1.2
+        # eg 1.30 = 1.3
+        num_units = int(divided * 10) / 10.0
+        is_exact = number % 1000000 == 0
 
-    return short_number + " " + unit
+
+    ret_str = "{num} {unit}".format(
+        num=word_for_num(num_units),
+        unit=unit
+    )
+    if not is_exact:
+        ret_str = "over " + ret_str
+
+    return ret_str
+
 
 
 
@@ -137,7 +172,27 @@ def is_doi_url(url):
         return True
     return False
 
+def pick_best_url(urls):
+    if not urls:
+        return None
+
+    #get a backup
+    response = urls[0]
+
+    # now go through and pick the best one
+    for url in urls:
+        # doi if available
+        if "doi.org" in url:
+            response = url
+
+        # anything else if what we currently have is bogus
+        if response == "http://www.ncbi.nlm.nih.gov/pmc/articles/PMC":
+            response = url
+
+    return response
+
 def clean_doi(dirty_doi):
+
     if not dirty_doi:
         raise NoDoiException("There's no valid DOI.")
 
@@ -149,7 +204,7 @@ def clean_doi(dirty_doi):
 
     matches = re.findall(p, dirty_doi)
     if len(matches) == 0:
-        raise NoDoiException("There's no valid DOI.")
+        raise NoDoiException("There's no valid DOI for {}.".format(dirty_doi))
 
     match = matches[0]
 
@@ -161,6 +216,12 @@ def clean_doi(dirty_doi):
     # remove any url fragments
     if u"#" in resp:
         resp = resp.split(u"#")[0]
+
+    # get rid of the version number at the end of a figshare url
+    figshare_version_pattern = re.compile(u".*figshare.*\.v\d+$", re.IGNORECASE)  #might be .v1 or .V1
+    matches = figshare_version_pattern.findall(resp)
+    if matches:
+        resp = resp.rsplit(u".", 1)[0]
 
     return resp
 
@@ -245,6 +306,18 @@ def underscore_to_camelcase(value):
         capitalized_words.append(word.capitalize())
 
     return "".join(capitalized_words)
+
+def chunk_into_n_sublists(input, num_sublists):
+    """
+    returns num_sublists chunks of roughly equal size
+    from http://stackoverflow.com/a/4119142/596939
+    """
+    start = 0
+    for i in xrange(num_sublists):
+        stop = start + len(input[i::num_sublists])
+        yield input[start:stop]
+        start = stop
+
 
 def chunks(l, n):
     """

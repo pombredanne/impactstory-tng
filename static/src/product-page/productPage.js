@@ -41,12 +41,15 @@ angular.module('productPage', [
                                            $location,
                                            $http,
                                            $mdDialog,
-                                           $location,
+                                           $auth,
                                            Person,
                                            personResp){
 
 
         var possibleChannels = _.pluck(Person.d.sources, "source_name")
+
+        var ownsThisProfile = $auth.isAuthenticated() && $auth.getPayload().sub == Person.d.orcid_id
+
         var id
         id = $routeParams.id
         var product = _.findWhere(Person.d.products, {id: id})
@@ -58,7 +61,10 @@ angular.module('productPage', [
         $scope.person = Person.d
         $scope.sources = product.sources
         $scope.product = product
+        $scope.displayGenre = product.genre.replace("-", " ")
+        $scope.ownsThisProfile = ownsThisProfile
         $scope.d = {}
+
 
         console.log("$scope.product", $scope.product, $routeParams.filter)
 
@@ -131,8 +137,9 @@ angular.module('productPage', [
             $scope.postsSum += v.posts_count
         })
 
+
         $scope.d.postsLimit = 20
-        $scope.selectedChannel = _.findWhere(Person.d.sources, {source_name: $routeParams.filter})
+        $scope.selectedChannel = _.findWhere($scope.sources, {source_name: $routeParams.filter})
 
         $scope.toggleSelectedChannel = function(channel){
             console.log("toggling selected channel", channel)
@@ -143,6 +150,26 @@ angular.module('productPage', [
             else {
                 $location.url(rootUrl + "/" + channel.source_name)
             }
+        }
+
+        $scope.setFulltextUrl = function(ev){
+            console.log("stetting fulltext url for ", id)
+            var confirm = $mdDialog.prompt()
+                .clickOutsideToClose(true)
+                .title('Add link to free fulltext')
+                .textContent("(No free fulltext anywhere? Consider uploading this work to an open repository like Zenodo or Figshare.)")
+                .placeholder("What's the free fulltext URL?")
+                .targetEvent(ev)
+                .ok('Okay!')
+                .cancel('Cancel');
+
+            $mdDialog.show(confirm).then(function(result) {
+                Person.setFulltextUrl(id, result)
+
+
+            }, function() {
+                console.log("cancelled the setFulltextUrl dialog")
+            });
         }
 
 

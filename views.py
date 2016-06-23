@@ -8,8 +8,9 @@ from models.person import set_person_claimed_at
 from models.person import link_twitter
 from models.person import refresh_profile
 from models.person import add_or_overwrite_person_from_orcid_id
-from models.person import num_people_in_db
 from models.person import delete_person
+from models.product import get_all_products
+from models.refset import num_people_in_db
 from models.orcid import OrcidDoesNotExist
 from models.orcid import NoOrcidException
 from models.badge import badge_configs
@@ -38,6 +39,7 @@ import time
 import json
 import logging
 from urlparse import parse_qs, parse_qsl
+from time import sleep
 
 logger = logging.getLogger("views")
 
@@ -106,31 +108,31 @@ def index_view(path="index", page=""):
 @app.after_request
 def add_crossdomain_header(resp):
     resp.headers['Access-Control-Allow-Origin'] = "*"
-    resp.headers['Access-Control-Allow-Methods'] = "POST, GET, OPTIONS, PUT, DELETE, PATCH"
-    resp.headers['Access-Control-Allow-Headers'] = "origin, content-type, accept, x-requested-with"
+    resp.headers['Access-Control-Allow-Methods'] = "POST, GET, OPTIONS, PUT, DELETE, PATCH, HEAD"
+    resp.headers['Access-Control-Allow-Headers'] = "origin, content-type, accept, x-requested-with, authorization"
     return resp
 
 @app.before_request
-def redirect_to_https():
+def redirects():
+    new_url = None
+
     try:
         if request.headers["X-Forwarded-Proto"] == "https":
             pass
-        else:
-            return redirect(request.url.replace("http://", "https://"), 301)  # permanent
+        elif "http://" in request.url:
+            new_url = request.url.replace("http://", "https://")
     except KeyError:
         #logger.debug(u"There's no X-Forwarded-Proto header; assuming localhost, serving http.")
         pass
 
-
-@app.before_request
-def redirect_www_to_naked_domain():
     if request.url.startswith("https://www.impactstory.org"):
-
         new_url = request.url.replace(
             "https://www.impactstory.org",
             "https://impactstory.org"
         )
         logger.debug(u"URL starts with www; redirecting to " + new_url)
+
+    if new_url:
         return redirect(new_url, 301)  # permanent
 
 
@@ -227,7 +229,27 @@ def profile_endpoint_twitter(screen_name):
 @app.route("/api/person/<orcid_id>", methods=["POST"])
 @app.route("/api/person/<orcid_id>.json", methods=["POST"])
 def refresh_profile_endpoint(orcid_id):
-    my_person = refresh_profile(orcid_id)
+    if request.json:
+        my_person = Person.query.filter_by(orcid_id=orcid_id).first()
+
+        product_id = request.json["product"]["id"]
+        my_product = next(my_product for my_product in my_person.products if my_product.id==product_id)
+        url = request.json["product"]["fulltext_url"]
+        my_product.set_oa_from_user_supplied_fulltext_url(url)
+
+        my_person.recalculate_openness()
+
+        safe_commit(db)
+    else:
+        my_person = refresh_profile(orcid_id)
+    return json_resp(my_person.to_dict())
+
+@app.route("/api/person/<orcid_id>/fulltext", methods=["POST"])
+@app.route("/api/person/<orcid_id>/fulltext.json", methods=["POST"])
+def refresh_fulltext(orcid_id):
+    my_person = Person.query.filter_by(orcid_id=orcid_id).first()
+    my_person.recalculate_openness()
+    safe_commit(db)
     return json_resp(my_person.to_dict())
 
 
@@ -248,6 +270,12 @@ def tweeted_quickly(orcid_id):
 def search(search_str):
     ret = autocomplete(search_str)
     return jsonify({"list": ret, "count": len(ret)})
+
+
+@app.route("/api/products")
+def all_products_endpoint():
+    res = get_all_products()
+    return jsonify({"list": res })
 
 @app.route("/api/people")
 def people_endpoint():
@@ -340,7 +368,6 @@ def orcid_auth():
         token = my_person.get_token()
     except AttributeError:  # my_person is None. So make a new user
 
-        # @todo: make_person() is untested. Test.
         my_person = make_person(my_orcid_id, high_priority=True)
         token = my_person.get_token()
 
